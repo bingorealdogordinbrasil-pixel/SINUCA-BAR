@@ -4220,7 +4220,7 @@
         x.fillStyle='#bd824b';x.fillRect(0,0,512,512);
         for(let i=0;i<220;i++){const y=Math.random()*512,a=0.04+Math.random()*0.12;x.strokeStyle='rgba('+(75+Math.random()*45|0)+','+(39+Math.random()*28|0)+',14,'+a+')';x.lineWidth=0.6+Math.random()*2.6;x.beginPath();x.moveTo(0,y);for(let px=0;px<=512;px+=32)x.lineTo(px,y+Math.sin(px*0.012+i)*3+Math.sin(px*0.05+i*1.7)*1.2);x.stroke();}
         for(let i=0;i<0;i++){const cx=Math.random()*512,cy=Math.random()*512;for(let r=4;r<26;r+=3){x.strokeStyle='rgba(60,25,12,0.07)';x.lineWidth=1;x.beginPath();x.ellipse(cx,cy,r*2.6,r*0.7,0,0,Math.PI*2);x.stroke();}}
-        const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.encoding=THREE.sRGBEncoding;t.anisotropy=16;return t;
+        const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.encoding=THREE.sRGBEncoding;t.anisotropy=8;return t;
     }
     const texMogno=texturaMadeiraMogno();
     [madeiraMat,pernaMat,reforcoMat].forEach(m=>{m.map=texMogno;m.roughness=0.36;m.metalness=0.04;m.envMapIntensity=0.55;m.needsUpdate=true;});
@@ -4250,7 +4250,7 @@
     const formaXZ=pts=>new THREE.Shape(pts.map(([x,z])=>new THREE.Vector2(x,-z)));
     function malhaPlanta(forma,opc,mat,y){const m=new THREE.Mesh(new THREE.ExtrudeGeometry(forma,opc),mat);m.rotation.x=-Math.PI/2;m.position.y=y;m.castShadow=true;m.receiveShadow=true;mesaFoto.add(m);return m;}
     {
-        const forma=formaXZ(arredondarBicos([[-RAIL_EXT_X,-RAIL_EXT_Z],[RAIL_EXT_X,-RAIL_EXT_Z],[RAIL_EXT_X,RAIL_EXT_Z],[-RAIL_EXT_X,RAIL_EXT_Z]],[0.9,0.9,0.9,0.9]));
+        const forma=formaXZ(arredondarBicos([[-RAIL_EXT_X,-RAIL_EXT_Z],[RAIL_EXT_X,-RAIL_EXT_Z],[RAIL_EXT_X,RAIL_EXT_Z],[-RAIL_EXT_X,RAIL_EXT_Z]],[1.8,1.8,1.8,1.8]));
         const furo=new THREE.Path();const N=1440;
         for(let i=0;i<N;i++){const th=i/N*Math.PI*2,r=raioContornoInterno(th),px=Math.sin(th)*r,pz=-Math.cos(th)*r;if(i===0)furo.moveTo(px,pz);else furo.lineTo(px,pz);}
         furo.closePath();forma.holes.push(furo);
@@ -4320,10 +4320,14 @@
         if(arco){
             // Aba/saia de alumínio contínua: sobe até a ferragem superior e
             // desce visivelmente para dentro da boca em cada uma das 6 caçapas.
-            const yBaseAbaAluminio=Y_PANO-1.35;
+            const yBaseAbaAluminio=Y_PANO-1.70;
             const yTopoAbaAluminio=yTopoRail+0.12;
             const hAbaAluminio=yTopoAbaAluminio-yBaseAbaAluminio;
-            const abaAluminio=new THREE.Mesh(new THREE.CylinderGeometry(R-0.01,R-0.01,hAbaAluminio,40,1,true,Math.PI/2-arco.fi-arco.len,arco.len),forroMat);
+            // Parede metálica chanfrada para dentro da boca: topo conserva o
+            // diâmetro da caçapa e a borda inferior recua radialmente para o
+            // centro, como o perfil inclinado da borracha da tabela.
+            const raioTopoAluminio=R-0.01,raioBaseAluminio=Math.max(0.05,raioTopoAluminio-0.22*MESA_ESCALA);
+            const abaAluminio=new THREE.Mesh(new THREE.CylinderGeometry(raioTopoAluminio,raioBaseAluminio,hAbaAluminio,40,1,true,Math.PI/2-arco.fi-arco.len,arco.len),forroMat);
             abaAluminio.position.set(cx,yBaseAbaAluminio+hAbaAluminio/2,cz);
             abaAluminio.castShadow=false;abaAluminio.receiveShadow=true;
             forrosCacapa.push(abaAluminio);mesaFoto.add(abaAluminio);
@@ -4366,8 +4370,16 @@
         const ptsCanto=[[0,0],[1.65,-1.65],[3.35,-0.8]];
         for(let k=1;k<21;k++){const aa=aB-varrC*k/21;ptsCanto.push([4.674+Math.cos(aa)*1.547,Math.sin(aa)*1.547]);}
         ptsCanto.push([3.35,0.8],[1.65,1.65]);
-        const raiosCanto=ptsCanto.map((pt,i)=>i===0?0.9:(i===1||i===24)?0.15:(i===2||i===23)?0.3:0);
-        const sh=new THREE.Shape(arredondarBicos(ptsCanto,raiosCanto).map(p=>new THREE.Vector2(p[0],p[1])));
+        const raiosCanto=ptsCanto.map((pt,i)=>i===0||i===1||i===24?1.8:(i===2||i===23)?0.8:0);
+        // Recorta a chapa superior dos cantos contra o mesmo contorno externo
+        // arredondado da madeira; nenhum vértice nem aresta pode sobressair.
+        const limiteCantosMesa=arredondarBicos([[-RAIL_EXT_X,-RAIL_EXT_Z],[RAIL_EXT_X,-RAIL_EXT_Z],[RAIL_EXT_X,RAIL_EXT_Z],[-RAIL_EXT_X,RAIL_EXT_Z]],[1.8,1.8,1.8,1.8]);
+        const limiteLocal=arredondarBicos(ptsCanto,raiosCanto).map(([u,v])=>[cx+ux*u+vx*v,cz+uz*u+vz*v]);
+        const centroLimite=limiteCantosMesa.reduce((a,p)=>[a[0]+p[0]/limiteCantosMesa.length,a[1]+p[1]/limiteCantosMesa.length],[0,0]);
+        function pontoDentroLimiteCanto(x,z){let dentro=false;for(let i=0,j=limiteCantosMesa.length-1;i<limiteCantosMesa.length;j=i++){const a=limiteCantosMesa[i],b=limiteCantosMesa[j];if(((a[1]>z)!==(b[1]>z))&&(x<(b[0]-a[0])*(z-a[1])/(b[1]-a[1])+a[0]))dentro=!dentro;}return dentro;}
+        function recortarPontoCanto(x,z){if(pontoDentroLimiteCanto(x,z))return [x,z];let melhor=null,dmin=Infinity;for(let i=0;i<limiteCantosMesa.length;i++){const a=limiteCantosMesa[i],b=limiteCantosMesa[(i+1)%limiteCantosMesa.length],dx=b[0]-a[0],dz=b[1]-a[1],t=Math.max(0,Math.min(1,((x-a[0])*dx+(z-a[1])*dz)/(dx*dx+dz*dz||1))),qx=a[0]+dx*t,qz=a[1]+dz*t,d=(x-qx)**2+(z-qz)**2;if(d<dmin){dmin=d;melhor=[qx,qz];}}const ix=centroLimite[0]-melhor[0],iz=centroLimite[1]-melhor[1],il=Math.hypot(ix,iz)||1;return [melhor[0]+ix/il*0.001,melhor[1]+iz/il*0.001];}
+        const contornoCantoDentro=limiteLocal.map(p=>{const q=recortarPontoCanto(p[0],p[1]),dx=q[0]-cx,dz=q[1]-cz;return [dx*ux+dz*uz,dx*vx+dz*vz];});
+        const sh=new THREE.Shape(contornoCantoDentro.map(p=>new THREE.Vector2(p[0],p[1])));
         const g=new THREE.ExtrudeGeometry(sh,extrusaoPlaca);
         g.applyMatrix4(new THREE.Matrix4().makeBasis(
             new THREE.Vector3(ux,0,uz),
@@ -4420,21 +4432,25 @@
     for(const sx of [-1,1])for(const z of [-16.8,-11.2,-5.6,5.6,11.2,16.8]){const d=new THREE.Mesh(geoDiamante,madreperolaMat);d.position.set(sx*14.35,yTopoRail+0.01,z);mesaFoto.add(d);}
     for(const sz of [-1,1])for(const x of [-5.69,0,5.69]){const d=new THREE.Mesh(geoDiamante,madreperolaMat);d.position.set(x,yTopoRail+0.01,sz*24.45);mesaFoto.add(d);}
     // Saia, friso duplo e dois pedestais largos (como na foto).
-    const saia=new THREE.Mesh(escalarUV(caixaTronco(RAIL_EXT_X*2,RAIL_EXT_Z*2,RAIL_EXT_X*2-0.1,RAIL_EXT_Z*2-0.1,1.1),1),saiaBrancaMat);
-    saia.position.y=Y_RAIL_BASE-0.55;saia.castShadow=true;saia.receiveShadow=true;mesaFoto.add(saia);
+    // Avental/saia externo de madeira com os mesmos cantos arredondados do
+    // contorno superior e das ferragens de alumínio: bordas alinhadas e justas.
+    const formaSaiaMadeira=formaXZ(arredondarBicos([[-RAIL_EXT_X,-RAIL_EXT_Z],[RAIL_EXT_X,-RAIL_EXT_Z],[RAIL_EXT_X,RAIL_EXT_Z],[-RAIL_EXT_X,RAIL_EXT_Z]],[1.8,1.8,1.8,1.8]));
+    const geoSaiaMadeira=new THREE.ExtrudeGeometry(formaSaiaMadeira,{depth:1.1,bevelEnabled:false,curveSegments:24});geoSaiaMadeira.rotateX(-Math.PI/2);
+    const saia=new THREE.Mesh(escalarUV(geoSaiaMadeira,1),saiaBrancaMat);
+    saia.position.y=Y_RAIL_BASE-1.1;saia.castShadow=true;saia.receiveShadow=true;mesaFoto.add(saia);
     const friso=new THREE.Mesh(new THREE.BoxGeometry(RAIL_EXT_X*2-0.7,0.25,RAIL_EXT_Z*2-0.7),reforcoMat);friso.position.y=Y_RAIL_BASE-1.22;mesaFoto.add(friso);
     const friso2=new THREE.Mesh(new THREE.BoxGeometry(RAIL_EXT_X*2-1.6,0.35,RAIL_EXT_Z*2-1.6),pernaMat);friso2.position.y=Y_RAIL_BASE-1.52;mesaFoto.add(friso2);
     // Avental de madeira espesso, como na referência: painéis contínuos nos quatro lados.
-    const painelSaiaMat=saiaBrancaMat; // segue a cor da madeira (preto na mesa Platinum)
-    const frisoAventalMat=new THREE.MeshStandardMaterial({color:0x2a2c30,roughness:0.5,metalness:0.12});
-    const alturaAvental=3.4,yAvental=5.6;
+    const painelSaiaMat=new THREE.MeshStandardMaterial({color:0xb8793f,roughness:0.68,metalness:0.02});
+    const frisoAventalMat=new THREE.MeshStandardMaterial({color:0xdda66d,roughness:0.62,metalness:0.015});
+    const alturaAvental=4.25,yAvental=5.18;
     for(const sx of [-1,1]){
         const painel=new THREE.Mesh(new THREE.BoxGeometry(0.52,alturaAvental,48.2),painelSaiaMat);painel.position.set(sx*14.55,yAvental,0);painel.castShadow=true;painel.receiveShadow=true;mesaFoto.add(painel);
         for(const yy of [yAvental-alturaAvental/2+0.18,yAvental+alturaAvental/2-0.18]){const f=new THREE.Mesh(new THREE.BoxGeometry(0.58,0.16,48.2),frisoAventalMat);f.position.set(sx*14.58,yy,0);mesaFoto.add(f);}
     }
     for(const sz of [-1,1]){
-        const painel=new THREE.Mesh(new THREE.BoxGeometry(29.2,alturaAvental,0.52),painelSaiaMat);painel.position.set(0,yAvental,sz*24.6);painel.castShadow=true;painel.receiveShadow=true;mesaFoto.add(painel);
-        for(const yy of [yAvental-alturaAvental/2+0.18,yAvental+alturaAvental/2-0.18]){const f=new THREE.Mesh(new THREE.BoxGeometry(29.2,0.16,0.58),frisoAventalMat);f.position.set(0,yy,sz*24.63);mesaFoto.add(f);}
+        const painel=new THREE.Mesh(new THREE.BoxGeometry(29.2,alturaAvental,0.52),painelSaiaMat);painel.position.set(0,yAvental,sz*24.05);painel.castShadow=true;painel.receiveShadow=true;mesaFoto.add(painel);
+        for(const yy of [yAvental-alturaAvental/2+0.18,yAvental+alturaAvental/2-0.18]){const f=new THREE.Mesh(new THREE.BoxGeometry(29.2,0.16,0.58),frisoAventalMat);f.position.set(0,yy,sz*24.08);mesaFoto.add(f);}
     }
     // Inlays em losango: dois por lado comprido e três no lado estreito, como a foto.
     const losangoMadrep = new THREE.MeshStandardMaterial({color:0xd9ad79,roughness:0.48,metalness:0.04,emissive:0x1a0c03,emissiveIntensity:0.04});
@@ -4447,15 +4463,14 @@
         g.applyMatrix4(new THREE.Matrix4().makeBasis(u,v,n));g.translate(cx,yAvental,cz);
         const m=new THREE.Mesh(g,losangoMadrep);m.castShadow=false;m.receiveShadow=true;mesaFoto.add(m);
     }
-    // Abertura do coletor de bolas no avental comprido (retângulo rebaixado com moldura, como na foto).
+    for(const sx of [-1,1])for(const z of [-10.6,10.6])adicionarLosangoAvental(sx*14.86,z,'x',3.9,1.0);
+    for(const sz of [-1,1])for(const x of [-7.2,0,7.2])adicionarLosangoAvental(x,sz*24.36,'z',3.8,1.0);
+    // Fechadura e duas portinholas discretas no avental comprido.
+    const latãoDetalhe=new THREE.MeshStandardMaterial({color:0x9e7744,roughness:0.34,metalness:0.68});
     for(const sx of [-1,1]){
-        const yP=yAvental-0.1;
-        const vao=new THREE.Mesh(new THREE.BoxGeometry(0.04,1.35,8.0),new THREE.MeshStandardMaterial({color:0x060607,roughness:0.95,metalness:0}));vao.position.set(sx*14.83,yP,0);mesaFoto.add(vao);
-        for(const yy of [-0.82,0.82]){const bar=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.28,9.0),frisoAventalMat);bar.position.set(sx*14.86,yP+yy,0);bar.castShadow=true;mesaFoto.add(bar);}
-        for(const zz of [-4.36,4.36]){
-            const bar=new THREE.Mesh(new THREE.BoxGeometry(0.12,1.9,0.28),frisoAventalMat);bar.position.set(sx*14.86,yP,zz);bar.castShadow=true;mesaFoto.add(bar);
-            const par=new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.11,0.06,14),matCabecaParafuso);par.rotation.z=Math.PI/2;par.position.set(sx*14.94,yP,zz);mesaFoto.add(par);
-        }
+        const moldura=new THREE.Mesh(new THREE.BoxGeometry(0.08,1.45,5.6),frisoAventalMat);moldura.position.set(sx*14.88,5.05,0);mesaFoto.add(moldura);
+        const porta=new THREE.Mesh(new THREE.BoxGeometry(0.09,1.05,4.7),painelSaiaMat);porta.position.set(sx*14.94,5.05,0);mesaFoto.add(porta);
+        const fechadura=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.16,0.11,18),latãoDetalhe);fechadura.rotation.z=Math.PI/2;fechadura.position.set(sx*15.02,5.2,2.7);mesaFoto.add(fechadura);
     }
     const yPiso=0.53,yTopoPe=Y_RAIL_BASE-1.7;
     for(const sz of [-1,1]){
@@ -4473,43 +4488,6 @@
                 b.position.set(sxs*hw,yy,zp+sz*dz2);mesaFoto.add(b);
             });
         }));
-    }
-
-    // ===== DETALHES DA MESA PLATINUM (foto de referência) =====
-    {
-        const XE=14.95,ZE=24.95,LP=4.0,yPe=yPiso+0.22,yTopoPerna=Y_RAIL_BASE-0.02;
-        const quad=(cx,cz,w,d,r)=>formaXZ(arredondarBicos([[cx-w/2,cz-d/2],[cx+w/2,cz-d/2],[cx+w/2,cz+d/2],[cx-w/2,cz+d/2]],[r,r,r,r]));
-        // saia superior arredondada (a antiga era uma caixa de quinas vivas)
-        saia.visible=false;
-        malhaPlanta(quad(0,0,RAIL_EXT_X*2-0.1,RAIL_EXT_Z*2-0.1,0.85),{depth:1.1,bevelEnabled:false,curveSegments:8},saiaBrancaMat,Y_RAIL_BASE-1.1);
-        const matPeBorracha=new THREE.MeshStandardMaterial({color:0x0b0b0c,roughness:0.9,metalness:0.02});
-        const geoParPerna=new THREE.CylinderGeometry(0.13,0.13,0.07,14);
-        const geoPeBorracha=new THREE.CylinderGeometry(0.85,0.95,0.14,28);
-        const geoHasteNiv=new THREE.CylinderGeometry(0.3,0.3,0.12,16);
-        const Xo=RAIL_EXT_X+0.1,Zo=RAIL_EXT_Z+0.1,LC=3.5,tC=0.16;
-        const yBaseCap=Y_RAIL_BASE-1.08,hCap=yTopoRail+0.02-yBaseCap;
-        for(const sx of [-1,1])for(const sz of [-1,1]){
-            const cx=sx*(XE-LP/2),cz=sz*(ZE-LP/2);
-            // perna quadrada grossa, quinas chanfradas
-            const perna=malhaPlanta(quad(cx,cz,LP,LP,0.34),{depth:yTopoPerna-yPe,bevelEnabled:false,curveSegments:6},pernaMat,yPe);
-            escalarUV(perna.geometry,1/16);
-            // pé nivelador (borracha + haste de alumínio)
-            const pb=new THREE.Mesh(geoPeBorracha,matPeBorracha);pb.position.set(cx,yPiso+0.07,cz);pb.castShadow=true;mesaFoto.add(pb);
-            const hn=new THREE.Mesh(geoHasteNiv,aluminioMat);hn.position.set(cx,yPiso+0.2,cz);mesaFoto.add(hn);
-            // parafusos de alumínio nas duas faces externas da perna
-            for(const yy of [3.3,2.55]){
-                const px=new THREE.Mesh(geoParPerna,matCabecaParafuso);px.rotation.z=Math.PI/2;px.position.set(sx*(XE+0.02),yy,cz);mesaFoto.add(px);
-                const pz=new THREE.Mesh(geoParPerna,matCabecaParafuso);pz.rotation.x=Math.PI/2;pz.position.set(cx,yy,sz*(ZE+0.02));mesaFoto.add(pz);
-            }
-            // cantoneira de alumínio vertical: abraça o canto da tabela e desce pela lateral
-            const L=[[Xo-LC,Zo],[Xo,Zo],[Xo,Zo-LC],[Xo-tC,Zo-LC],[Xo-tC,Zo-tC],[Xo-LC,Zo-tC]].map(([x,z])=>[x*sx,z*sz]);
-            const cap=malhaPlanta(formaXZ(arredondarBicos(L,[0,0.9,0,0,0.74,0])),{depth:hCap,bevelEnabled:true,bevelThickness:0.03,bevelSize:0.03,bevelSegments:2,curveSegments:8},aluminioMat,yBaseCap);
-            cap.castShadow=false;
-            // rebites escuros na cantoneira (um em cada aba)
-            const rb=new THREE.CylinderGeometry(0.1,0.1,0.05,12);
-            const rx=new THREE.Mesh(rb,parafusoMat);rx.rotation.z=Math.PI/2;rx.position.set(sx*(Xo+0.06),yTopoRail-0.9,sz*(Zo-2.3));mesaFoto.add(rx);
-            const rz=new THREE.Mesh(rb,parafusoMat);rz.rotation.x=Math.PI/2;rz.position.set(sx*(Xo-2.3),yTopoRail-0.9,sz*(Zo+0.06));mesaFoto.add(rz);
-        }
     }
     mesaBase.visible=false;
 
@@ -6300,11 +6278,10 @@ function criarTexturaBolaMarmorizada(cor,num) {
     const cameraViewToggle = document.getElementById('camera-view-toggle');
     if(cameraViewToggle) cameraViewToggle.addEventListener('click',async e=>{
         e.preventDefault(); e.stopPropagation();
-        // Ciclo: NORMAL -> DE CIMA -> 1ª PESSOA -> NORMAL
-        const proxModoCamera=((cameraModoVistaSuperior?1:cameraModoPrimeiraPessoa?2:0)+1)%3;
-        cameraModoVistaSuperior=proxModoCamera===1;cameraModoPrimeiraPessoa=proxModoCamera===2;
-        cameraViewToggle.setAttribute('aria-pressed',proxModoCamera?'true':'false');
-        cameraViewToggle.textContent=['CÂMERA · NORMAL','CÂMERA · DE CIMA','CÂMERA · 1ª PESSOA'][proxModoCamera];
+        // Alterna apenas entre CÂMERA NORMAL e CÂMERA DE CIMA.
+        cameraModoVistaSuperior=!cameraModoVistaSuperior;cameraModoPrimeiraPessoa=false;
+        cameraViewToggle.setAttribute('aria-pressed',cameraModoVistaSuperior?'true':'false');
+        cameraViewToggle.textContent=cameraModoVistaSuperior?'CÂMERA · DE CIMA':'CÂMERA · NORMAL';
         // A visão superior usa a tela horizontal para caber a mesa inteira.
         if(cameraModoVistaSuperior)girarParaPaisagem();else{try{if(screen.orientation&&typeof screen.orientation.unlock==='function')screen.orientation.unlock();}catch(err){}}
     });
@@ -6660,7 +6637,9 @@ function criarTexturaBolaMarmorizada(cor,num) {
         const anguloSquirt=-spinX*DESVIO_EFEITO_MIRA;
         const rx=dX*Math.cos(anguloSquirt)+dZ*Math.sin(anguloSquirt);
         const rz=-dX*Math.sin(anguloSquirt)+dZ*Math.cos(anguloSquirt);
-        const a=spinX*OFFSET_MAX_TACO*tacoEfeitoMultiplicador, b=spinY*OFFSET_MAX_TACO*fatorEfeitoVertical(spinY);
+        // Ponto abaixo do centro (spinY negativo) gera retro mais forte, sem
+        // alterar o topspin, o efeito lateral nem a força de translação.
+        const a=spinX*OFFSET_MAX_TACO*tacoEfeitoMultiplicador, b=spinY*OFFSET_MAX_TACO*fatorEfeitoVertical(spinY)*(spinY<0?1.55:1);
         // Taco-bola: v = 2F/(m(1+m/M+5/2(a²+b²))) — efeito descentralizado rouba um pouco de velocidade.
         const eficiencia=1/(1+0.55*(spinX*spinX+spinY*spinY)*OFFSET_MAX_TACO*OFFSET_MAX_TACO*2.5);
         const v=f*eficiencia, vUps=v*60;
@@ -6689,6 +6668,11 @@ function criarTexturaBolaMarmorizada(cor,num) {
     function transferirEfeitoContato(b1,b2,nx,nz,impulsoNormal){
         const d1=b1.userData,d2=b2.userData;
         const R=RAIO;
+        // Guarda o sentido do giro vertical da branca antes do contato. Um
+        // choque de raspão pode transferir parte do efeito, mas não deve
+        // inverter o retro/topspin que o jogador escolheu no controle.
+        const topCueAntes1=b1===branca?d1.omegaX*d1.spinAxisX+d1.omegaZ*d1.spinAxisZ:null;
+        const topCueAntes2=b2===branca?d2.omegaX*d2.spinAxisX+d2.omegaZ*d2.spinAxisZ:null;
         // Deslize da superfície da bola 1 no ponto de contato (ω×r, r = n·R).
         const s1x= d1.omegaY*nz*R, s1y=(d1.omegaZ*nx-d1.omegaX*nz)*R, s1z=-d1.omegaY*nx*R;
         // Deslize da superfície da bola 2 no mesmo ponto (ω×r, r = -n·R).
@@ -6709,6 +6693,18 @@ function criarTexturaBolaMarmorizada(cor,num) {
         const dWx= nz*Fy*kR, dWy=(-nz*Fx+nx*Fz)*kR, dWz=-nx*Fy*kR;
         d2.omegaX+=dWx; d2.omegaY+=dWy; d2.omegaZ+=dWz;
         d1.omegaX+=dWx; d1.omegaY+=dWy; d1.omegaZ+=dWz;
+        // Mantém o sinal do giro vertical comandado na branca após o choque;
+        // deixa o contato reduzir o efeito, mas nunca fazê-lo girar ao contrário.
+        function preservarSentidoVerticalCue(b,antes){
+            if(b!==branca||antes===null||Math.abs(antes)<0.0001)return;
+            const d=b.userData,ax=d.spinAxisX,az=d.spinAxisZ,eixo=Math.hypot(ax,az);
+            if(eixo<0.0001)return;
+            const nx=ax/eixo,nz=az/eixo,atual=d.omegaX*nx+d.omegaZ*nz;
+            const minimo=Math.abs(antes)*0.35,alvo=Math.sign(antes)*Math.max(minimo,Math.sign(antes)*atual);
+            const ajuste=alvo-atual;d.omegaX+=nx*ajuste;d.omegaZ+=nz*ajuste;
+        }
+        preservarSentidoVerticalCue(b1,topCueAntes1);
+        preservarSentidoVerticalCue(b2,topCueAntes2);
         // Parte do efeito da branca "queima" no contato.
         d1.spinSide*=0.8; d1.spinTop*=0.85;
         limitarVelocidadeAngular(b1); limitarVelocidadeAngular(b2);
@@ -6756,7 +6752,9 @@ function criarTexturaBolaMarmorizada(cor,num) {
     }
     function limitarVelocidadeAngular(b) {
         const d=b.userData, magnitude=Math.hypot(d.omegaX,d.omegaY,d.omegaZ);
-        const limiteSpin=VELOCIDADE_LIMITE_SPIN*(d.isBranca?1+gameState.upgrades.efeito*0.24:1);
+        // Aumenta só o limite do retro na branca, para o giro não ser cortado
+        // antes de atuar no pano após o choque com a bola-alvo.
+        const limiteSpin=VELOCIDADE_LIMITE_SPIN*(d.isBranca?1+gameState.upgrades.efeito*0.24:1)*(d.isBranca&&d.spinTop<0?1.4:1);
         if(magnitude>limiteSpin) {
             const fator=limiteSpin/magnitude;
             d.omegaX*=fator; d.omegaY*=fator; d.omegaZ*=fator;
@@ -6815,10 +6813,10 @@ function criarTexturaBolaMarmorizada(cor,num) {
         const off=Math.hypot(spinX,spinY);if(off>1){spinX/=off;spinY/=off;}
         const eficiencia=1/(1+0.55*(spinX*spinX+spinY*spinY)*OFFSET_MAX_TACO*OFFSET_MAX_TACO*2.5);
         const v=forca*eficiencia,vUps=v*60;
-        const bSpin=spinY*OFFSET_MAX_TACO*fatorEfeitoVertical(spinY),aSpin=spinX*OFFSET_MAX_TACO*tacoEfeitoMultiplicador;
+        const bSpin=spinY*OFFSET_MAX_TACO*fatorEfeitoVertical(spinY)*(spinY<0?1.55:1),aSpin=spinX*OFFSET_MAX_TACO*tacoEfeitoMultiplicador;
         const wTop=2.5*vUps*bSpin/RAIO,wSide=-2.5*vUps*aSpin/RAIO;
         let vx=v,vz=0,omegaX=0,omegaZ=-wTop,omegaY=wSide;
-        const limSpin=VELOCIDADE_LIMITE_SPIN*(1+gameState.upgrades.efeito*0.24);
+        const limSpin=VELOCIDADE_LIMITE_SPIN*(1+gameState.upgrades.efeito*0.24)*(spinY<0?1.4:1);
         const magSpin=Math.hypot(omegaX,omegaY,omegaZ);
         if(magSpin>limSpin){const f2=limSpin/magSpin;omegaX*=f2;omegaY*=f2;omegaZ*=f2;}
         const H=1/60,limDesl=0.006*UNIDADES_POR_METRO;
@@ -7073,14 +7071,17 @@ function criarTexturaBolaMarmorizada(cor,num) {
                         b.userData.caindo=true; dentroDaBoca=true; b.userData.cacapaIdx=undefined;
                     }
                     // Anti-penetração: corrige no mesmo subpasso. Só a caçapa do eixo que a bola está cruzando abre a borracha.
-                    if(!dentroDaBoca && !estaNoVaoDaCacapa(b,'x') && Math.abs(b.position.x)>LIMITE_X-CORTE_NARIZ) {
+                    // A colisão ocorre no nariz interno da tabela. LIMITE_X/Z
+                    // já incluem o raio da bola; não recue mais pelo chanfro,
+                    // senão o centro entra na borracha antes de rebater.
+                    if(!dentroDaBoca && !estaNoVaoDaCacapa(b,'x') && Math.abs(b.position.x)>LIMITE_X) {
                         const lado=Math.sign(b.position.x);
-                        b.position.x=lado*(LIMITE_X-CORTE_NARIZ);
+                        b.position.x=lado*LIMITE_X;
                         aplicarReboteTabela(b,'x',lado);
                     }
-                    if(!dentroDaBoca && !estaNoVaoDaCacapa(b,'z') && Math.abs(b.position.z)>LIMITE_Z-CORTE_NARIZ) {
+                    if(!dentroDaBoca && !estaNoVaoDaCacapa(b,'z') && Math.abs(b.position.z)>LIMITE_Z) {
                         const lado=Math.sign(b.position.z);
-                        b.position.z=lado*(LIMITE_Z-CORTE_NARIZ);
+                        b.position.z=lado*LIMITE_Z;
                         aplicarReboteTabela(b,'z',lado);
                     }
                     if(!dentroDaBoca) aplicarColisaoBicoCacapas(b);
@@ -7102,8 +7103,8 @@ function criarTexturaBolaMarmorizada(cor,num) {
                         // subpasso). Prende na hora, no mesmo instante da colisão —
                         // sem esperar o próximo passo (nada de bola atravessando).
                         for(const bb of [b1,b2]){
-                            if(!estaNoVaoDaCacapa(bb,'x')&&Math.abs(bb.position.x)>LIMITE_X-CORTE_NARIZ){const lado=Math.sign(bb.position.x);bb.position.x=lado*(LIMITE_X-CORTE_NARIZ);}
-                            if(!estaNoVaoDaCacapa(bb,'z')&&Math.abs(bb.position.z)>LIMITE_Z-CORTE_NARIZ){const lado=Math.sign(bb.position.z);bb.position.z=lado*(LIMITE_Z-CORTE_NARIZ);}
+                            if(!estaNoVaoDaCacapa(bb,'x')&&Math.abs(bb.position.x)>LIMITE_X){const lado=Math.sign(bb.position.x);bb.position.x=lado*LIMITE_X;}
+                            if(!estaNoVaoDaCacapa(bb,'z')&&Math.abs(bb.position.z)>LIMITE_Z){const lado=Math.sign(bb.position.z);bb.position.z=lado*LIMITE_Z;}
                         }
                         const vRel=(b1.userData.vx-b2.userData.vx)*nx+(b1.userData.vz-b2.userData.vz)*nz;
                         if(vRel > 0) {
@@ -7185,7 +7186,7 @@ function criarTexturaBolaMarmorizada(cor,num) {
         const dMovX=dX*Math.cos(squirtMira)+dZ*Math.sin(squirtMira), dMovZ=-dX*Math.sin(squirtMira)+dZ*Math.cos(squirtMira);
         let distColisao = 1000, alvoMira = null;
         bolas.forEach(b => { if(!b.userData.ativa || b===branca || b.userData.caindo) return; const bx=b.position.x-branca.position.x, bz=b.position.z-branca.position.z, proj = bx*dMovX + bz*dMovZ; if(proj>0) { const dR = Math.hypot(bx-dMovX*proj, bz-dMovZ*proj); if(dR < RAIO*2) { const dC = proj - Math.sqrt(Math.pow(RAIO*2,2)-Math.pow(dR,2)); if(dC < distColisao) { distColisao = dC; alvoMira = b; } } } });
-        if(distColisao === 1000) { let tX = dMovX > 0 ? (LIMITE_X-CORTE_NARIZ - branca.position.x)/dMovX : (-(LIMITE_X-CORTE_NARIZ) - branca.position.x)/dMovX; let tZ = dMovZ > 0 ? (LIMITE_Z-CORTE_NARIZ - branca.position.z)/dMovZ : (-(LIMITE_Z-CORTE_NARIZ) - branca.position.z)/dMovZ; distColisao = Math.min(tX, tZ); }
+        if(distColisao === 1000) { let tX = dMovX > 0 ? (LIMITE_X - branca.position.x)/dMovX : (-LIMITE_X - branca.position.x)/dMovX; let tZ = dMovZ > 0 ? (LIMITE_Z - branca.position.z)/dMovZ : (-LIMITE_Z - branca.position.z)/dMovZ; distColisao = Math.min(tX, tZ); }
         if(parImpar.ativo){const n=!mesaMovendo&&alvoMira?alvoMira.userData.numero:null;if(n!==numeroBolaNaMira){numeroBolaNaMira=n;exibirPlacarParImpar();}}
 
         const podeVerMira=gameState.aimLength>0 && !mesaMovendo && !gameState.aguardandoReset && !gameState.faseConcluida;
@@ -7240,8 +7241,8 @@ function criarTexturaBolaMarmorizada(cor,num) {
             // No Treino Livre a mira atravessa as bolas e segue até a tabela,
             // para permitir visualizar a direção completa; nos demais modos
             // continua terminando no primeiro contato, como antes.
-            const limiteLinhaX=dMovX>1e-8?(LIMITE_X-CORTE_NARIZ-branca.position.x)/dMovX:(dMovX< -1e-8?(-LIMITE_X+CORTE_NARIZ-branca.position.x)/dMovX:Infinity);
-            const limiteLinhaZ=dMovZ>1e-8?(LIMITE_Z-CORTE_NARIZ-branca.position.z)/dMovZ:(dMovZ< -1e-8?(-LIMITE_Z+CORTE_NARIZ-branca.position.z)/dMovZ:Infinity);
+            const limiteLinhaX=dMovX>1e-8?(LIMITE_X-branca.position.x)/dMovX:(dMovX< -1e-8?(-LIMITE_X-branca.position.x)/dMovX:Infinity);
+            const limiteLinhaZ=dMovZ>1e-8?(LIMITE_Z-branca.position.z)/dMovZ:(dMovZ< -1e-8?(-LIMITE_Z-branca.position.z)/dMovZ:Infinity);
             const distanciaAteTabela=Math.max(0,Math.min(limiteLinhaX>0?limiteLinhaX:Infinity,limiteLinhaZ>0?limiteLinhaZ:Infinity));
             const distanciaGuiaNPC=turnoNPC?distanciaAteTabela:distColisao;
             const pontoGuiaX=branca.position.x+dMovX*distanciaGuiaNPC;
@@ -7265,7 +7266,8 @@ function criarTexturaBolaMarmorizada(cor,num) {
         if(!ghostStopBall.visible) ghostStopBall.userData.ativo=false;
         if(podeVerMira) {
             // A bola fantasma e a linha usam o mesmo vetor e a mesma distância calculada.
-            ghostBall.position.set(branca.position.x+dMovX*distColisao,Y_BOLAS,branca.position.z+dMovZ*distColisao);
+            const limiteFantasmaX=LIMITE_X,limiteFantasmaZ=LIMITE_Z;
+            ghostBall.position.set(Math.max(-limiteFantasmaX,Math.min(limiteFantasmaX,branca.position.x+dMovX*distColisao)),Y_BOLAS,Math.max(-limiteFantasmaZ,Math.min(limiteFantasmaZ,branca.position.z+dMovZ*distColisao)));
             if(alvoMira) {
                 if(parImpar.ativo && parImpar.modo==='parimpar') {
                     // Bola fantasma inteligente: VERDE = bola do grupo de quem joga,
